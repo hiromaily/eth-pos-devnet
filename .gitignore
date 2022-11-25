@@ -4,3 +4,4 @@ consensus/validatordata
 execution/geth
 execution/geth.ipc
 .idea/
+data/
