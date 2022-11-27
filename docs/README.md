@@ -12,7 +12,7 @@
 - [config.yml](./consensus/config.yml)は変更することも可能。例えば、`BELLATRIX_FORK_EPOCH`によって各 slot 間隔が 4 秒になっているため、処理が早く進む。
 - [Prysm Client Interoperability Guide](https://github.com/prysmaticlabs/prysm/blob/develop/INTEROP.md)
   - この config は、prysm で定義している`interop` network (testnet)が base になっている
-- TODO: lodestar を使う場合、そっくりこの設定を使う必要があるわけではなく、必要な設定が見極められればよい
+- TODO: lodestar を使う場合、そっくりこの設定を使う必要があるわけではなく、必要な設定が見極められればよいのでは？
 
 ## go-ethreum の設定
 
@@ -102,9 +102,10 @@
 - `cmds/beacon/handler.ts`の`beaconHandler()`内の処理
   - beaconHandlerInit() ... argsからconfig,option,networkなどを返す
     - getBeaconConfigFromArgs() ... `IChainConfig`を返す
-      - `IChainConfig`について
+      - [`IChainConfig`](https://github.com/ChainSafe/lodestar/blob/unstable/packages/config/src/chainConfig/types.ts)について
         - [`packages/config/src/chainConfig/types.ts`](https://github.com/ChainSafe/lodestar/blob/unstable/packages/config/src/chainConfig/types.ts)に定義されている
         - これは、eth-pos-devnetの[consensus/config.yml](https://github.com/rauljordan/eth-pos-devnet/blob/master/consensus/config.yml)とほぼ同じだが、`SLOTS_PER_EPOCH`が、このtypescriptで書かれた`IChainConfig`に定義されていない。
+        - しかし、`SLOTS_PER_EPOCH`は、lodestarの`packages/params/src/index.ts`に定義されている
       - `createIChainForkConfig(getBeaconParamsFromArgs(args));`のresponseがconfigの実態となる
         - getBeaconParamsFromArgs()
           - `args.network`, `args.paramsFile`が使われる
@@ -133,9 +134,21 @@
 ### chainConfig の設定
 
 - `packages/config`が対象 package
-- `packages/validator/test/unit/utils/interopConfigs.ts` に様々な設定が存在する
 - `packages/config/src/chainConfig/networks` 内に各 network の定義がある
-- `packages/config/src/chainConfig/presets` 内に mainnet.ts と minimal.ts があり、default 値が設定される
+  - networksChainConfigにセットされるが、test以外に参照されていないように見える
+- `packages/config/src/chainConfig/presets` 内に `mainnet.ts` と `minimal.ts` があり、baseの値が設定される
+- `packages/validator/test/unit/utils/interopConfigs.ts` に異なるconsensus clientの設定が存在しているため、動作検証はされているはず
+
+### この文脈で使われる`interop`とは？
+- [Prysm Client Interoperability Guide](https://github.com/prysmaticlabs/prysm/blob/develop/INTEROP.md)
+  - [eth-pos-devnet/consensus/config.yml](https://github.com/rauljordan/eth-pos-devnet/blob/master/consensus/config.yml) は、prysm で定義している`interop` network (testnet)が base になっている
+- [Eth2 Interop in Review](https://blog.ethereum.org/2019/09/19/eth2-interop-in-review) ??
+  - multi-client testnets
+- lodestarにもgethのためのinterop環境構築のための設定scriptが用意されている
+  - https://github.com/ChainSafe/lodestar/tree/unstable/packages/beacon-node/test/scripts/el-interop/geth
+- 例えば、`packages/beacon-node/src/node/utils/interop`ディレクトリが存在し、以下のfunctionが定義されている
+  - interopDeposits() ... Compute and return deposit data from other validators.
+  - getInteropState()
 
 ### CommandLine Option の確認
 
