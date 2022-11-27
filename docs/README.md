@@ -14,6 +14,20 @@
   - この config は、prysm で定義している`interop` network (testnet)が base になっている
 - TODO: lodestar を使う場合、そっくりこの設定を使う必要があるわけではなく、必要な設定が見極められればよいのでは？
 
+### この文脈で使われる`interop`とは？
+- [Eth2 Interop in Review](https://blog.ethereum.org/2019/09/19/eth2-interop-in-review) ??
+  - multi-client testnets
+  - Lighthouse <-> Artemis, Lodestar <-> Lighthouse, Lodestar <-> Artemisといったの小さなテストネットワークで、各clientがペアリングによる相互運用性を達成する目的に使われる
+- lodestarにもgethのためのinterop環境構築のための設定scriptが用意されている
+  - https://github.com/ChainSafe/lodestar/tree/unstable/packages/beacon-node/test/scripts/el-interop/geth
+- 例えば、`packages/beacon-node/src/node/utils/interop`ディレクトリが存在し、以下のfunctionが定義されている
+  - interopDeposits() ... Compute and return deposit data from other validators.
+  - getInteropState()
+- lodestarにおけるinterop関連のissue
+  - https://github.com/ChainSafe/lodestar/labels/scope-interop
+  - [lodestar validator interop with other clients beacon nodes](https://github.com/ChainSafe/lodestar/issues/3368)
+    - この中の`Docker Setup for the local testnet of client beacons`このtaskができあがれば、今回のlocalnet環境構築は実現可能
+
 ## go-ethreum の設定
 
 - private key を設定する必要があり、マイニングによってチェーンを genesis から PoS モードに到達するまで進めるために利用される
@@ -139,16 +153,6 @@
 - `packages/config/src/chainConfig/presets` 内に `mainnet.ts` と `minimal.ts` があり、baseの値が設定される
 - `packages/validator/test/unit/utils/interopConfigs.ts` に異なるconsensus clientの設定が存在しているため、動作検証はされているはず
 
-### この文脈で使われる`interop`とは？
-- [Prysm Client Interoperability Guide](https://github.com/prysmaticlabs/prysm/blob/develop/INTEROP.md)
-  - [eth-pos-devnet/consensus/config.yml](https://github.com/rauljordan/eth-pos-devnet/blob/master/consensus/config.yml) は、prysm で定義している`interop` network (testnet)が base になっている
-- [Eth2 Interop in Review](https://blog.ethereum.org/2019/09/19/eth2-interop-in-review) ??
-  - multi-client testnets
-- lodestarにもgethのためのinterop環境構築のための設定scriptが用意されている
-  - https://github.com/ChainSafe/lodestar/tree/unstable/packages/beacon-node/test/scripts/el-interop/geth
-- 例えば、`packages/beacon-node/src/node/utils/interop`ディレクトリが存在し、以下のfunctionが定義されている
-  - interopDeposits() ... Compute and return deposit data from other validators.
-  - getInteropState()
 
 ### CommandLine Option の確認
 
