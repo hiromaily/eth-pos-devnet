@@ -10,6 +10,9 @@
 ## Prysm の設定
 
 - [config.yml](./consensus/config.yml)は変更することも可能。例えば、`BELLATRIX_FORK_EPOCH`によって各 slot 間隔が 4 秒になっているため、処理が早く進む。
+- [Prysm Client Interoperability Guide](https://github.com/prysmaticlabs/prysm/blob/develop/INTEROP.md)
+  - この config は、prysm で定義している`interop` network (testnet)が base になっている
+- TODO: lodestar を使う場合、そっくりこの設定を使う必要があるわけではなく、必要な設定が見極められればよい
 
 ## go-ethreum の設定
 
@@ -25,7 +28,7 @@
 ## 状況整理
 
 - `geth`の設定はそのまま流用できる
-- 現在の example は`prysm`を使っている
+- 現在の example は`prysm`を使っている。厳密には[prysm の interop](https://github.com/prysmaticlabs/prysm/blob/develop/INTEROP.md)
 - 用意された [genesis config](../consensus/config.yml) を使ってその他の node にどうやって適用するか、が焦点になる
 - docker-compose 内の、`create-beacon-chain-genesis`サービスがどのような挙動をするのか確認
   - この service を起動することによって、config から、`genesis.ssz`が生成される
@@ -54,22 +57,24 @@
       - --suggested-fee-recipient=0x123463a4b065722e99115d6c222f267d9cabb524
 ```
 
-| Prysm                     | Lodestar                       | 説明                                                               |
-| ------------------------- | ------------------------------ | ------------------------------------------------------------------ |
-| --datadir                 | --dataDir                      |                                                                    |
-| --min-sync-peers          | --targetPeers ??               | 0 を設定する                                                       |
-| --interop-genesis-state   | x ??                           | /consensus/genesis.ssz を指定するもの                              |
-| --interop-eth1data-votes  | x ??                           | TODO: prysm のコードを読まないとわからない                         |
-| --bootstrap-node          | --bootnodes ??                 | 空を設定する。default は空                                         |
-| --chain-config-file       |                                | /consensus/config.yml を指定するもの                               |
-| --chain-id                | x                              | 32382 を設定する。設定できないので、コードに手を入れる必要がある？ |
-| --rpc-host                | --rest.address (--rest も必要) | 0.0.0.0 を設定する                                                 |
-| --grpc-gateway-host       | x                              | 不要                                                               |
-| --execution-endpoint      | --execution.urls               |                                                                    |
-| --accept-terms-of-use     | x                              | 不要                                                               |
-| --jwt-secret              | --jwt-secret                   |                                                                    |
-| --suggested-fee-recipient | --suggestedFeeRecipient        |                                                                    |
+| Prysm                     | Lodestar                                                 | 説明                                                                                             |
+| ------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| --datadir                 | --dataDir                                                |                                                                                                  |
+| --min-sync-peers          | --targetPeers ??                                         | 0 を設定する                                                                                     |
+| --interop-genesis-state   | x `dev`モードではできない                                | /consensus/genesis.ssz を指定するもの                                                            |
+| --interop-eth1data-votes  | x ??                                                     | 提案者によってブロックに入れられた eth1 プルーフ オブ ワーク チェーン データのモックを可能にする |
+| --bootstrap-node          | --bootnodes ??                                           | 空を設定する。default は空                                                                       |
+| --chain-config-file       | configFile というものがあったが、deprecated になっている | /consensus/config.yml を指定するもの                                                             |
+| --chain-id                | x                                                        | 32382 を設定する。設定できないので、コードに手を入れる必要がある？                               |
+| --rpc-host                | --rest.address (--rest も必要)                           | 0.0.0.0 を設定する                                                                               |
+| --grpc-gateway-host       | x                                                        | 不要                                                                                             |
+| --execution-endpoint      | --execution.urls                                         |                                                                                                  |
+| --accept-terms-of-use     | x                                                        | 不要                                                                                             |
+| --jwt-secret              | --jwt-secret                                             |                                                                                                  |
+| --suggested-fee-recipient | --suggestedFeeRecipient                                  |                                                                                                  |
 
+- 補足
+  - [interop-eth1data-votes](https://github.com/prysmaticlabs/prysm/blob/develop/cmd/beacon-chain/flags/interop.go#L15-L19)
 - TODO: 場合によっては、lodestar を fork してハードコードされている箇所の修正が必要になるかもしれない
 
 ## Lodestar
@@ -80,10 +85,35 @@
 - `dev`サブコマンドをつけて起動することで、beacon node と validator が立ち上がる
 - 今回`dev`モードで起動する必要があるのか？`beacon`モードでもいいのかもしれない。
 
-### TODO: `dev`モードの内部的な挙動について
+### `dev`モードの内部的な挙動について
 
 - [Github lodestar cli](https://github.com/ChainSafe/lodestar/tree/unstable/packages/cli)
--
+- `process.env.LODESTAR_PRESET`に`minimal`がセットされる
+- `process.env.LODESTAR_NETWORK`に`dev`がセットされる。しかし、`LODESTAR_NETWORK`が使われている様子はない？
+- `cmds/dev/handler.ts`の`devHandler()`内の処理
+  - `network`が`dev`に設定される
+  - `genesisStateFile`を option で指定しても skip されてしまう。
+  - `initDevState()`によって、state が作られ、`genesis.ssz`が内部的に作られる
+  - 現在の挙動で`dev`モードを使うことは難しい
+
+### `beacon`モードの内部的な挙動について
+
+- `cmds/beacon/handler.ts`の`beaconHandler()`内の処理
+  - genesisState は、initBeaconState()内で生成される
+  - `args.genesisStateFile`がある場合は、そちらを優先
+  - ただし、`args.forceGenesis`が false である必要がある
+
+### network の種類について
+
+- 現在、`mainnet`, `gnosis`, `goerli`, `ropsten`, `sepolia`, `dev`が定義されており、それぞれ default の設定をもつ
+- `dev`の設定が望ましいが、genesisState が設定できない問題がある
+
+### chainConfig の設定
+
+- `packages/config`が対象 package
+- `packages/validator/test/unit/utils/interopConfigs.ts1 に様々な設定が存在する
+- `packages/config/src/chainConfig/networks` 内に各 network の定義がある
+- `packages/config/src/chainConfig/presets` 内に mainnet.ts と minimal.ts があり、default 値が設定される
 
 ### CommandLine Option の確認
 
