@@ -35,26 +35,22 @@ services:
   geth:
     image: "ethereum/client-go:v1.10.26"
     command:
-      - --networkid
-      - "15"
+      - --networkid=15
+      - --datadir=/execution
       - --http
       - --http.api=debug,personal,eth,net,web3,txpool,engine,miner
       - --http.addr=0.0.0.0
       - --rpc.allow-unprotected-txs
-      - --rpc.gascap
-      - "100000000"
+      - --rpc.gascap=100000000
       - --authrpc.vhosts=*
       - --authrpc.addr=0.0.0.0
       - --authrpc.jwtsecret=/secret/jwtsecret
-      - --datadir=/execution
       - --allow-insecure-unlock
       - --unlock=0xBe68fC2d8249eb60bfCf0e71D5A0d2F2e292c4eD,0x89b4AB1eF20763630df9743ACF155865600daFF2
-      - --password
-      - /dev/null
-      - --nodiscover
-      - --gcmode
-      - archive
+      - --password=/dev/null
+      - --gcmode=archive
       - --syncmode=full
+      - --nodiscover
       - --mine
       - --miner.threads=1
       - --miner.etherbase=0x0000000000000000000000000000000000000000
@@ -82,39 +78,28 @@ services:
     ports:
       - "9000:9000" # P2P port
       - "9596:9596" # REST API port
-    #stdin_open: true
-    #tty: true
     command:
       - dev
-      - --genesisValidators
-      - "8"
+      - --dataDir=/data
+      - --jwt-secret=/secret/jwtsecret
+      - --genesisValidators=8
+      - --startValidators=0..7
       - --genesisTime
       - ${timestamp}
-      - --startValidators
-      - "0..7"
-      - --enr.ip
-      - "127.0.0.1"
+      - --genesisEth1Hash
+      - ${genesisHash}
+      - --enr.ip=127.0.0.1
       - --rest
-      - --rest.address
-      - "0.0.0.0"
+      - --rest.address=0.0.0.0
       - --rest.namespace="beacon,config,events,node,validator,lightclient"
       - --eth1=true
       - --eth1.providerUrls
       - http://172.16.239.11:8545
       - --execution.urls
       - http://172.16.239.11:8551
-      - --terminal-total-difficulty-override
-      - "0"
-      - --genesisEth1Hash
-      - ${genesisHash}
-      - --params.ALTAIR_FORK_EPOCH
-      - "0"
-      - --params.BELLATRIX_FORK_EPOCH
-      - "0"
-      - --jwt-secret
-      - /secret/jwtsecret
-      - --dataDir
-      - /data
+      - --terminal-total-difficulty-override=0
+      - --params.ALTAIR_FORK_EPOCH=0
+      - --params.BELLATRIX_FORK_EPOCH=0
       - --reset
     networks:
       eth-localnet:
