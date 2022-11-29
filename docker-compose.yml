@@ -1,3 +1,5 @@
+# Refer to https://github.com/Snowfork/snowbridge/blob/464700b8e2dc2bc68abf87dff535ce41e48cc8e0/core/packages/test/scripts/start-services.sh
+
 version: "3.9"
 services:
   # Sets up the genesis configuration for the go-ethereum client from a JSON file.
@@ -8,34 +10,64 @@ services:
       - ./execution:/execution
       - ./execution/genesis.json:/execution/genesis.json
 
+  geth-account1:
+    image: "ethereum/client-go:v1.10.26"
+    command: --datadir=/execution account import --password /dev/null /config/dev-key0.prv
+    volumes:
+      - ./execution:/execution
+      - ./config:/config
+    depends_on:
+      geth-genesis:
+        condition: service_completed_successfully
+
+  geth-account2:
+    image: "ethereum/client-go:v1.10.26"
+    command: --datadir=/execution account import --password /dev/null /config/dev-key1.prv
+    volumes:
+      - ./execution:/execution
+      - ./config:/config
+    depends_on:
+      geth-account1:
+        condition: service_completed_successfully
+
   # Runs the go-ethereum execution client with the specified, unlocked account and necessary
   # APIs to allow for proof-of-stake consensus via Prysm.
   geth:
     image: "ethereum/client-go:v1.10.26"
     command:
+      - --networkid
+      - "15"
       - --http
-      - --http.api=eth
+      - --http.api=debug,personal,eth,net,web3,txpool,engine,miner
       - --http.addr=0.0.0.0
+      - --rpc.allow-unprotected-txs
+      - --rpc.gascap
+      - "100000000"
       - --authrpc.vhosts=*
       - --authrpc.addr=0.0.0.0
-      - --authrpc.jwtsecret=/execution/jwtsecret
+      - --authrpc.jwtsecret=/secret/jwtsecret
       - --datadir=/execution
       - --allow-insecure-unlock
-      - --unlock=0x123463a4b065722e99115d6c222f267d9cabb524
-      - --password=/execution/geth_password.txt
+      - --unlock=0xBe68fC2d8249eb60bfCf0e71D5A0d2F2e292c4eD,0x89b4AB1eF20763630df9743ACF155865600daFF2
+      - --password
+      - /dev/null
       - --nodiscover
+      - --gcmode
+      - archive
       - --syncmode=full
       - --mine
+      - --miner.threads=1
+      - --miner.etherbase=0x0000000000000000000000000000000000000000
+      - --miner.gasprice=0
     ports:
       - 8551:8551
       - 8545:8545
     depends_on:
-      geth-genesis:
+      geth-account2:
         condition: service_completed_successfully
     volumes:
       - ./execution:/execution
-      - ./execution/geth_password.txt:/execution/geth_password.txt
-      - ./jwtsecret:/execution/jwtsecret
+      - ./jwtsecret:/secret/jwtsecret
     networks:
       eth-localnet:
         ipv4_address: 172.16.239.11
@@ -43,11 +75,9 @@ services:
   lodestar:
     # https://hub.docker.com/r/chainsafe/lodestar
     image: 'chainsafe/lodestar:v1.2.2'
-    #platform: linux/arm64
     container_name: lodestar
     volumes:
-      - ./data/lodestar:/data
-      - ./data/secret/jwt.hex:/secret/jwt.hex
+      - ./consensus/lodestar:/data
       - ./jwtsecret:/secret/jwtsecret
     ports:
       - "9000:9000" # P2P port
@@ -57,40 +87,38 @@ services:
     command:
       - dev
       - --genesisValidators
-      - "2"
+      - "8"
+      - --genesisTime
+      - ${timestamp}
+      - --startValidators
+      - "0..7"
+      - --enr.ip
+      - "127.0.0.1"
       - --rest
       - --rest.address
       - "0.0.0.0"
-      - --eth1
+      - --rest.namespace="beacon,config,events,node,validator,lightclient"
+      - --eth1=true
       - --eth1.providerUrls
       - http://172.16.239.11:8545
       - --execution.urls
       - http://172.16.239.11:8551
+      - --terminal-total-difficulty-override
+      - "0"
+      - --genesisEth1Hash
+      - ${genesisHash}
+      - --params.ALTAIR_FORK_EPOCH
+      - "0"
+      - --params.BELLATRIX_FORK_EPOCH
+      - "0"
       - --jwt-secret
       - /secret/jwtsecret
-      #- --genesisTime
-      #- "1578787200"
-      #- --enr.ip
-      #- 127.0.0.1
       - --dataDir
       - /data
       - --reset
     networks:
       eth-localnet:
         ipv4_address: 172.16.239.12
-
-  # Creates a genesis state for the beacon chain using a YAML configuration file and
-  # a deterministic set of 64 validators.
-  create-beacon-chain-genesis:
-    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:latest"
-    command:
-      - testnet
-      - generate-genesis
-      - --num-validators=64
-      - --output-ssz=/consensus/genesis.ssz
-      - --chain-config-file=/consensus/config.yml
-    volumes:
-      - ./consensus:/consensus
 
 networks:
   eth-localnet:
@@ -100,57 +128,3 @@ networks:
       driver: default
       config:
         - subnet: 172.16.239.0/24
-
-  # Runs a Prysm beacon chain from a specified genesis state created in the previous step
-  # and connects to go-ethereum in the same network as the execution client.
-  # The account used in go-ethereum is set as the suggested fee recipient for transactions
-  # proposed via the validators attached to the beacon node.
-  # beacon-chain:
-  #   image: "gcr.io/prysmaticlabs/prysm/beacon-chain:latest"
-  #   command:
-  #     - --datadir=/consensus/beacondata
-  #     # No peers to sync with in this testnet, so setting to 0
-  #     - --min-sync-peers=0
-  #     - --interop-genesis-state=/consensus/genesis.ssz
-  #     - --interop-eth1data-votes
-  #     - --bootstrap-node=
-  #     # The chain configuration file used for setting up Prysm
-  #     - --chain-config-file=/consensus/config.yml
-  #     # We specify the chain id used by our execution client
-  #     - --chain-id=32382
-  #     - --rpc-host=0.0.0.0
-  #     - --grpc-gateway-host=0.0.0.0
-  #     - --execution-endpoint=http://geth:8551
-  #     - --chain-id=32382
-  #     - --accept-terms-of-use
-  #     - --jwt-secret=/execution/jwtsecret
-  #     - --suggested-fee-recipient=0x123463a4b065722e99115d6c222f267d9cabb524
-  #   depends_on:
-  #     geth:
-  #       condition: service_started
-  #     create-beacon-chain-genesis:
-  #       condition: service_completed_successfully
-  #   ports:
-  #     - 4000:4000
-  #     - 3500:3500
-  #     - 8080:8080
-  #   volumes:
-  #     - ./consensus:/consensus
-  #     - ./jwtsecret:/execution/jwtsecret
-
-  # We run a validator client with 64, deterministically-generated keys that match
-  # The validator keys present in the beacon chain genesis state generated a few steps above.
-  # validator:
-  #   image: "gcr.io/prysmaticlabs/prysm/validator:latest"
-  #   command:
-  #     - --beacon-rpc-provider=beacon-chain:4000
-  #     - --datadir=/consensus/validatordata
-  #     - --accept-terms-of-use
-  #     - --interop-num-validators=64
-  #     - --interop-start-index=0
-  #     - --chain-config-file=/consensus/config.yml
-  #   depends_on:
-  #     beacon-chain:
-  #       condition: service_started
-  #   volumes:
-  #     - ./consensus:/consensus
